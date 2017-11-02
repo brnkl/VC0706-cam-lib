@@ -1,0 +1,18 @@
+cflags:
+{
+    -std=c99
+}
+
+requires:
+{
+    api:
+    {}
+
+    component:
+    {}
+}
+
+sources:
+{
+  camera.c
+}
