@@ -3,7 +3,6 @@
 #include "camera.h"
 #include <time.h>
 
-
 COMPONENT_INIT {
   Camera cam = {
     .fd = openCameraFd(),
