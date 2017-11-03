@@ -3,18 +3,6 @@
 #include "camera.h"
 #include <time.h>
 
-COMPONENT_INIT {
-  Camera cam = {
-    .fd = openCameraFd(),
-    .serialNum = 0x0,
-    .bufferLen = 0,
-    .frameptr = 0
-  };
-  bool success = takePicture(&cam);
-  LE_INFO("Number of bytes in buffer: %d", NUM_ARRAY_MEMBERS(cam.buff));
-  LE_INFO("Did it work: %d", success);
-}
-
 // Used to wait for the serial port
 void delay (unsigned int msecs) {
   unsigned int secs = msecs / 1000;
@@ -261,18 +249,4 @@ bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt) 
     tilt>>8, tilt
   };
   return !runCommand(cam, VC0706_SET_ZOOM, args, 5);
-}
-
-size_t camToFile (Camera *cam, char *path) {
-  FILE *photo = fopen(path, "w");
-  if (photo != NULL) {
-    LE_INFO("File pointer for %s is valid", path);
-    size_t bytesWritten = fwrite(&(cam->buff), sizeof(cam->buff[0]), cam->bufferLen, photo);
-    fclose(photo);
-    return bytesWritten;
-  }
-  else {
-    LE_INFO("File pointer for %s is invalid", path);
-    return -1;
-  }
 }
