@@ -252,3 +252,38 @@ bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt) 
   };
   return !runCommand(cam, VC0706_SET_ZOOM, args, 5);
 }
+
+bool snapshotToFile (Camera *cam, char *path, byte imgSize) {
+  setImageSize(cam, imgSize);
+  LE_INFO("Taking photo...");
+  bool photoTaken = takePicture(cam);
+  if (photoTaken) {
+    LE_INFO("Photo taken");
+    char writePath[100];
+    // e.g /mnt/sd/<timestamp>.jpg
+    sprintf(writePath, "%s/%d.jpg", path, (int)time(0));
+    LE_INFO("Opening file pointer for path %s", writePath);
+    FILE *filePtr = fopen(writePath, "w");
+    if (filePtr != NULL) {
+      LE_INFO("Got valid file pointer");
+      int jpgLen = frameLength(cam);
+      while (jpgLen > 0) {
+        byte *buff;
+        uint8_t bytesToRead = 32 < jpgLen ? jpgLen : 32;
+        buff = readPicture(cam, bytesToRead);
+        fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
+        jpgLen -= bytesToRead;
+      }
+      fclose(filePtr);
+      return true;
+    }
+    else {
+      LE_ERROR("Invalid file pointer for %s", writePath);
+      return false;
+    }
+  }
+  else {
+    LE_ERROR("Failed to take photo");
+    return false;
+  }
+}

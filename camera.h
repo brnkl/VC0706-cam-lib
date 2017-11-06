@@ -83,4 +83,4 @@ byte getCompression (Camera *cam);
 bool setCompression(Camera *cam, byte c);
 bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt);
 bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt);
-size_t camToFile (Camera *cam, char *path);
+bool snapshotToFile (Camera *cam, char *path, byte imgSize);
