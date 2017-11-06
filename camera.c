@@ -48,7 +48,7 @@ int readResponse (Camera *cam, int nBytes, unsigned int timeout) {
   // read while below timeout and while the buffer
   // is still smaller than expected
   while(timeout >= counter && cam->bufferLen <= nBytes) {
-    ssize_t bytesRead = read(cam->fd, &(cam->buff) + cam->bufferLen, 1); // read one byte at a time
+    ssize_t bytesRead = read(cam->fd, &(cam->buff[0]) + cam->bufferLen, 1); // read one byte at a time
     cam->bufferLen++;
     // bytesRead will be 0 or -1 if no data was received
     if (bytesRead <= 0) {
@@ -114,6 +114,7 @@ byte *readPicture (Camera *cam, byte n) {
 bool resumeVideo (Camera *cam) {
   return cameraFrameBuffCtrl(cam, VC0706_RESUMEFRAME);
 }
+
 uint32_t frameLength (Camera *cam) {
   byte args[] = { 0x01, 0x00 };
   if (!runCommand(cam, VC0706_GET_FBUF_LEN, args, 9))
@@ -137,7 +138,7 @@ char *getVersion (Camera *cam) {
   if (!readResponse(cam, BUFF_SIZE, 200))
     return 0;
   cam->buff[cam->bufferLen] = 0;
-  return (char*)&(cam->buff);
+  return (char*)&(cam->buff[0]);
 }
 
 byte available (Camera *cam) {
