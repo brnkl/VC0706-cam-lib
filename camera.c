@@ -3,8 +3,6 @@
 #include "camera.h"
 #include <time.h>
 
-COMPONENT_INIT { }
-
 // Used to wait for the serial port
 void delay (unsigned int msecs) {
   unsigned int secs = msecs / 1000;
@@ -21,7 +19,7 @@ int openCameraFd () {
 }
 
 // Send a command to the camera serial port
-void sendCommand (Camera *cam, byte cmd, byte args[]) {
+void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]) {
   uint8_t init = VC0706_PREFIX;
   write(cam->fd, &init, 1); // send the cmd prefix
   write(cam->fd, &(cam->serialNum), 1); // send the serial number
@@ -32,7 +30,7 @@ void sendCommand (Camera *cam, byte cmd, byte args[]) {
 }
 
 // Run a command
-bool runCommand (Camera *cam, byte cmd, byte args[], int respLen) {
+bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
   sendCommand(cam, cmd, args);
   if (readResponse(cam, respLen, TIMEOUT) != respLen)
     return false;
@@ -42,13 +40,13 @@ bool runCommand (Camera *cam, byte cmd, byte args[], int respLen) {
 }
 
 // Reads from the camera and returns how many bytes it read
-int readResponse (Camera *cam, int nBytes, unsigned int timeout) {
+uint8_t readResponse (Camera *cam, int nBytes, unsigned int timeout) {
   int counter = 0;
   cam->bufferLen = 0;
   // read while below timeout and while the buffer
   // is still smaller than expected
   while(timeout >= counter && cam->bufferLen <= nBytes) {
-    ssize_t bytesRead = read(cam->fd, &(cam->buff[0]) + cam->bufferLen, 1); // read one byte at a time
+    ssize_t bytesRead = read(cam->fd, &(cam->buff[0]) + cam->bufferLen, 1); // read one uint8_t at a time
     cam->bufferLen++;
     // bytesRead will be 0 or -1 if no data was received
     if (bytesRead <= 0) {
@@ -61,7 +59,7 @@ int readResponse (Camera *cam, int nBytes, unsigned int timeout) {
   return cam->bufferLen;
 }
 
-bool verifyResponse (Camera *cam, byte cmd) {
+bool verifyResponse (Camera *cam, uint8_t cmd) {
   // If any of these are not equal than
   // the command failed
   return
@@ -71,8 +69,8 @@ bool verifyResponse (Camera *cam, byte cmd) {
     cam->buff[3] != 0x0);
 }
 
-bool cameraFrameBuffCtrl (Camera *cam, byte cmd) {
-  byte args[] = { 0x1, cmd };
+bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd) {
+  uint8_t args[] = { 0x1, cmd };
   return runCommand(cam, cmd, args, 5);
 }
 
@@ -82,22 +80,22 @@ bool takePicture (Camera *cam) {
 }
 
 bool reset (Camera *cam) {
-  byte args[] = { 0x0 };
+  uint8_t args[] = { 0x0 };
   return runCommand(cam, VC0706_RESET, args, 5);
 }
 
 bool TVon (Camera *cam) {
-  byte args[] = { 0x1, 0x1 };
+  uint8_t args[] = { 0x1, 0x1 };
   return runCommand(cam, VC0706_TVOUT_CTRL, args, 5);
 }
 
 bool TVOff (Camera *cam) {
-  byte args[] = { 0x1, 0x0 };
+  uint8_t args[] = { 0x1, 0x0 };
   return runCommand(cam, VC0706_TVOUT_CTRL, args, 5);
 }
 
-byte *readPicture (Camera *cam, byte n) {
-  byte args[] = { 0x0C, 0x0, 0x0A,
+uint8_t *readPicture (Camera *cam, uint8_t n) {
+  uint8_t args[] = { 0x0C, 0x0, 0x0A,
     0, 0, cam->frameptr >> 8, cam->frameptr & 0xFF,
     0, 0, 0, n,
     DELAY >> 8, DELAY & 0xFF };
@@ -116,7 +114,7 @@ bool resumeVideo (Camera *cam) {
 }
 
 uint32_t frameLength (Camera *cam) {
-  byte args[] = { 0x01, 0x00 };
+  uint8_t args[] = { 0x01, 0x00 };
   if (!runCommand(cam, VC0706_GET_FBUF_LEN, args, 9))
     return 0;
 
@@ -133,7 +131,7 @@ uint32_t frameLength (Camera *cam) {
 }
 
 char *getVersion (Camera *cam) {
-  byte args[] = { 0x01 };
+  uint8_t args[] = { 0x01 };
   sendCommand(cam, VC0706_GEN_VERSION, args);
   if (!readResponse(cam, BUFF_SIZE, 200))
     return 0;
@@ -141,43 +139,43 @@ char *getVersion (Camera *cam) {
   return (char*)&(cam->buff[0]);
 }
 
-byte available (Camera *cam) {
+uint8_t available (Camera *cam) {
   return cam->bufferLen;
 }
 
-byte getDownsize (Camera *cam) {
-  byte args[] = { 0x0 };
+uint8_t getDownsize (Camera *cam) {
+  uint8_t args[] = { 0x0 };
   if (!runCommand(cam, VC0706_DOWNSIZE_STATUS, args, 6))
     return -1;
   return cam->buff[5];
 }
 
-bool setDownsize(Camera *cam, byte newSize) {
-  byte args[] = { 0x01, newSize };
+bool setDownsize (Camera *cam, uint8_t newSize) {
+  uint8_t args[] = { 0x01, newSize };
   return runCommand(cam, VC0706_DOWNSIZE_CTRL, args, 5);
 }
 
-int getImageSize (Camera *cam) {
-  byte args[] = { 0x4, 0x4, 0x1, 0x00, 0x19 };
+uint8_t getImageSize (Camera *cam) {
+  uint8_t args[] = { 0x4, 0x4, 0x1, 0x00, 0x19 };
   if (!runCommand(cam, VC0706_READ_DATA, args, 6))
     return -1;
   return cam->buff[5];
 }
 
-bool setImageSize (Camera *cam, byte x) {
-  byte args[] = { 0x05, 0x04, 0x01, 0x00, 0x19, x };
+bool setImageSize (Camera *cam, uint8_t x) {
+  uint8_t args[] = { 0x05, 0x04, 0x01, 0x00, 0x19, x };
   return runCommand(cam, VC0706_WRITE_DATA, args, 5);
 }
 
 bool getMotionDetect (Camera *cam) {
-  byte args[] = { 0x0 };
+  uint8_t args[] = { 0x0 };
   if (!runCommand(cam, VC0706_COMM_MOTION_STATUS, args, 6))
     return false;
   return cam->buff[5];
 }
 
-byte getMotionStatus(Camera *cam, byte x) {
-  byte args[] = { 0x01, x };
+uint8_t getMotionStatus(Camera *cam, uint8_t x) {
+  uint8_t args[] = { 0x01, x };
   return runCommand(cam, VC0706_MOTION_STATUS, args, 5);
 }
 
@@ -192,28 +190,28 @@ bool motionDetected (Camera *cam) {
 bool setMotionDetect (Camera *cam, bool flag) {
   if (!setMotionStatus(cam, VC0706_MOTIONCONTROL, VC0706_UARTMOTION, VC0706_ACTIVATEMOTION))
     return false;
-  byte args[] = { 0x1, flag };
+  uint8_t args[] = { 0x1, flag };
   return runCommand(cam, VC0706_MOTION_STATUS, args, 5);
 }
 
-bool setMotionStatus (Camera *cam, byte x, byte d1, byte d2) {
-  byte args[] = { 0x03, x, d1, d2 };
+bool setMotionStatus (Camera *cam, uint8_t x, uint8_t d1, uint8_t d2) {
+  uint8_t args[] = { 0x03, x, d1, d2 };
   return runCommand(cam, VC0706_MOTION_CTRL, args, 5);
 }
 
-byte getCompression (Camera *cam) {
-  byte args[] = { 0x4, 0x1, 0x1, 0x12, 0x04 };
+uint8_t getCompression (Camera *cam) {
+  uint8_t args[] = { 0x4, 0x1, 0x1, 0x12, 0x04 };
   runCommand(cam, VC0706_READ_DATA, args, 6);
   return cam->buff[5];
 }
 
-bool setCompression (Camera *cam, byte c) {
-  byte args[] = { 0x5, 0x1, 0x1, 0x12, 0x04, c };
+bool setCompression (Camera *cam, uint8_t c) {
+  uint8_t args[] = { 0x5, 0x1, 0x1, 0x12, 0x04, c };
   return runCommand(cam, VC0706_WRITE_DATA, args, 5);
 }
 
 bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt) {
-  byte args[] = {0x0};
+  uint8_t args[] = {0x0};
 
   if (!runCommand(cam, VC0706_GET_ZOOM, args, 16))
     return false;
@@ -245,7 +243,7 @@ bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, u
 }
 
 bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt) {
-  byte args[] = {
+  uint8_t args[] = {
     0x08, wz >> 8, wz,
     hz >> 8, wz,
     pan>>8, pan,
@@ -254,7 +252,7 @@ bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt) 
   return !runCommand(cam, VC0706_SET_ZOOM, args, 5);
 }
 
-bool snapshotToFile (Camera *cam, char *path, byte imgSize) {
+bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
   setImageSize(cam, imgSize);
   LE_INFO("Taking photo...");
   bool photoTaken = takePicture(cam);
@@ -269,7 +267,7 @@ bool snapshotToFile (Camera *cam, char *path, byte imgSize) {
       LE_INFO("Got valid file pointer");
       int jpgLen = frameLength(cam);
       while (jpgLen > 0) {
-        byte *buff;
+        uint8_t *buff;
         uint8_t bytesToRead = 32 < jpgLen ? jpgLen : 32;
         buff = readPicture(cam, bytesToRead);
         fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
