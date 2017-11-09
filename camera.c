@@ -33,6 +33,8 @@ void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]) {
 
 // Run a command
 bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
+  // flush out the buffer
+  readResponse(cam, 100, 10);
   sendCommand(cam, cmd, args);
   if (readResponse(cam, respLen, TIMEOUT) != respLen)
     return false;
@@ -42,13 +44,14 @@ bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
 }
 
 // Reads from the camera and returns how many bytes it read
-uint8_t readResponse (Camera *cam, int nBytes, unsigned int timeout) {
-  int counter = 0;
+uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout) {
+  unsigned int counter = 0;
   cam->bufferLen = 0;
   // read while below timeout and while the buffer
   // is still smaller than expected
   while(timeout >= counter && cam->bufferLen <= nBytes) {
-    ssize_t bytesRead = read(cam->fd, &(cam->buff[0]) + cam->bufferLen, 1); // read one uint8_t at a time
+    uint8_t *buffPtr = &(cam->buff[cam->bufferLen])
+    ssize_t bytesRead = read(cam->fd, buffPtr, 1); // read one uint8_t at a time
     cam->bufferLen++;
     // bytesRead will be 0 or -1 if no data was received
     if (bytesRead <= 0) {
@@ -65,15 +68,15 @@ bool verifyResponse (Camera *cam, uint8_t cmd) {
   // If any of these are not equal than
   // the command failed
   return
-    !(cam->buff[0] != VC0706_RESP_PREFIX ||
-    cam->buff[1] != cam->serialNum ||
-    cam->buff[2] != cmd ||
-    cam->buff[3] != 0x0);
+    cam->buff[0] == VC0706_RESP_PREFIX &&
+    cam->buff[1] == cam->serialNum &&
+    cam->buff[2] == cmd &&
+    cam->buff[3] == 0x0;
 }
 
 bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd) {
   uint8_t args[] = { 0x1, cmd };
-  return runCommand(cam, cmd, args, 5);
+  return runCommand(cam, VC0706_FBUF_CTRL, args, 5);
 }
 
 bool takePicture (Camera *cam) {
@@ -117,6 +120,7 @@ bool resumeVideo (Camera *cam) {
 
 uint32_t frameLength (Camera *cam) {
   uint8_t args[] = { 0x01, 0x00 };
+  // return 0 if this fails
   if (!runCommand(cam, VC0706_GET_FBUF_LEN, args, 9))
     return 0;
 

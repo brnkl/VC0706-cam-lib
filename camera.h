@@ -56,7 +56,7 @@ void delay (unsigned int msecs);
 int openCameraFd ();
 void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]);
 bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen);
-uint8_t readResponse (Camera *cam, int nBytes, unsigned int timeout);
+uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout);
 bool verifyResponse (Camera *cam, uint8_t cmd);
 bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd);
 bool takePicture (Camera *cam);
