@@ -3,6 +3,8 @@
 #include "camera.h"
 #include <time.h>
 
+COMPONENT_INIT { }
+
 // Used to wait for the serial port
 void delay (unsigned int msecs) {
   unsigned int secs = msecs / 1000;
