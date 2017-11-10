@@ -14,27 +14,29 @@ void delay (unsigned int msecs) {
 
 // Returns a file descriptor that can be used to
 // talk to the camera
-int openCameraFd () {
+int openCameraFd (int nBytes, int timeout) {
   int fd = le_tty_Open(SERIAL_PATH, O_RDWR);
-  le_tty_SetBaudRate(fd, CAM_BAUD_RATE);
+  le_tty_SetBaudRate(fd, LE_TTY_SPEED_38400);
+  le_tty_SetRaw(fd, nBytes, timeout);
   return fd;
 }
 
 // Send a command to the camera serial port
 void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]) {
-  uint8_t init = VC0706_PREFIX;
-  write(cam->fd, &init, 1); // send the cmd prefix
-  write(cam->fd, &(cam->serialNum), 1); // send the serial number
-  write(cam->fd, &cmd, 1); // send the cmd
-  for(int i = 0; i < NUM_ARRAY_MEMBERS(args); i++) { // send each arg
-    write(cam->fd, &args[i], 1);
-  }
+  uint8_t nArgs = sizeof(args);
+  uint8_t toWrite[100] = { VC0706_PREFIX, cam->serialNum, cmd };
+  int start = 3;
+  int end = nArgs + start;
+  for (int i = start; i < end; i++) {
+    toWrite[i] = args[i - start];
+  };
+  write(cam->fd, &toWrite[0], end);
 }
 
 // Run a command
-bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
+bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen, bool flushFlag) {
   // flush out the buffer
-  readResponse(cam, 100, 10);
+  if (flushFlag) readResponse(cam, 100, 10);
   sendCommand(cam, cmd, args);
   if (readResponse(cam, respLen, TIMEOUT) != respLen)
     return false;
@@ -43,25 +45,27 @@ bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
   return true;
 }
 
+bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], int respLen) {
+  return runCommand (cam, cmd, args, respLen, true);
+}
+
 // Reads from the camera and returns how many bytes it read
 uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout) {
-  unsigned int counter = 0;
   cam->bufferLen = 0;
-  // read while below timeout and while the buffer
-  // is still smaller than expected
-  while(timeout >= counter && cam->bufferLen <= nBytes) {
-    uint8_t *buffPtr = &(cam->buff[cam->bufferLen])
-    ssize_t bytesRead = read(cam->fd, buffPtr, 1); // read one uint8_t at a time
-    cam->bufferLen++;
-    // bytesRead will be 0 or -1 if no data was received
-    if (bytesRead <= 0) {
-      delay(1);
-      counter++;
-      continue;
-    }
-    counter = 0;
-  }
+  uint8_t *buffPtr = &(cam->buff[0]);
+  LE_INFO("Expecting %d bytes", nBytes);
+  ssize_t bytesRead = read(cam->fd, buffPtr, nBytes);
+  LE_INFO("Got %d bytes", bytesRead);
+  printBuffer(cam);
+  cam->bufferLen = bytesRead;
   return cam->bufferLen;
+}
+
+void printBuffer (Camera *cam) {
+  LE_INFO("Printing cam buffer");
+  for(int i = 0; i < NUM_ARRAY_MEMBERS(cam->buff); i++) {
+    LE_INFO("0x%d", cam->buff[i]);
+  }
 }
 
 bool verifyResponse (Camera *cam, uint8_t cmd) {
@@ -76,7 +80,7 @@ bool verifyResponse (Camera *cam, uint8_t cmd) {
 
 bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd) {
   uint8_t args[] = { 0x1, cmd };
-  return runCommand(cam, VC0706_FBUF_CTRL, args, 5);
+  return runCommandFlush(cam, VC0706_FBUF_CTRL, args, 5);
 }
 
 bool takePicture (Camera *cam) {
@@ -86,17 +90,17 @@ bool takePicture (Camera *cam) {
 
 bool reset (Camera *cam) {
   uint8_t args[] = { 0x0 };
-  return runCommand(cam, VC0706_RESET, args, 5);
+  return runCommandFlush(cam, VC0706_RESET, args, 5);
 }
 
 bool TVon (Camera *cam) {
   uint8_t args[] = { 0x1, 0x1 };
-  return runCommand(cam, VC0706_TVOUT_CTRL, args, 5);
+  return runCommandFlush(cam, VC0706_TVOUT_CTRL, args, 5);
 }
 
 bool TVOff (Camera *cam) {
   uint8_t args[] = { 0x1, 0x0 };
-  return runCommand(cam, VC0706_TVOUT_CTRL, args, 5);
+  return runCommandFlush(cam, VC0706_TVOUT_CTRL, args, 5);
 }
 
 uint8_t *readPicture (Camera *cam, uint8_t n) {
@@ -104,7 +108,7 @@ uint8_t *readPicture (Camera *cam, uint8_t n) {
     0, 0, cam->frameptr >> 8, cam->frameptr & 0xFF,
     0, 0, 0, n,
     DELAY >> 8, DELAY & 0xFF };
-  if (!runCommand(cam, VC0706_READ_FBUF, args, 5))
+  if (!runCommand(cam, VC0706_READ_FBUF, args, 5, false)) // don't flush
     return 0;
   if (readResponse(cam, n + 5, DELAY) == 0)
     return 0;
@@ -121,7 +125,7 @@ bool resumeVideo (Camera *cam) {
 uint32_t frameLength (Camera *cam) {
   uint8_t args[] = { 0x01, 0x00 };
   // return 0 if this fails
-  if (!runCommand(cam, VC0706_GET_FBUF_LEN, args, 9))
+  if (!runCommandFlush(cam, VC0706_GET_FBUF_LEN, args, 9))
     return 0;
 
   uint32_t len;
@@ -139,8 +143,10 @@ uint32_t frameLength (Camera *cam) {
 char *getVersion (Camera *cam) {
   uint8_t args[] = { 0x01 };
   sendCommand(cam, VC0706_GEN_VERSION, args);
-  if (!readResponse(cam, BUFF_SIZE, 200))
+  if (!readResponse(cam, BUFF_SIZE, 200)) {
+    LE_INFO("Failed to get version, returning empty string");
     return 0;
+  }
   cam->buff[cam->bufferLen] = 0;
   return (char*)&(cam->buff[0]);
 }
@@ -151,38 +157,38 @@ uint8_t available (Camera *cam) {
 
 uint8_t getDownsize (Camera *cam) {
   uint8_t args[] = { 0x0 };
-  if (!runCommand(cam, VC0706_DOWNSIZE_STATUS, args, 6))
+  if (!runCommandFlush(cam, VC0706_DOWNSIZE_STATUS, args, 6))
     return -1;
   return cam->buff[5];
 }
 
 bool setDownsize (Camera *cam, uint8_t newSize) {
   uint8_t args[] = { 0x01, newSize };
-  return runCommand(cam, VC0706_DOWNSIZE_CTRL, args, 5);
+  return runCommandFlush(cam, VC0706_DOWNSIZE_CTRL, args, 5);
 }
 
 uint8_t getImageSize (Camera *cam) {
   uint8_t args[] = { 0x4, 0x4, 0x1, 0x00, 0x19 };
-  if (!runCommand(cam, VC0706_READ_DATA, args, 6))
+  if (!runCommandFlush(cam, VC0706_READ_DATA, args, 6))
     return -1;
   return cam->buff[5];
 }
 
 bool setImageSize (Camera *cam, uint8_t x) {
   uint8_t args[] = { 0x05, 0x04, 0x01, 0x00, 0x19, x };
-  return runCommand(cam, VC0706_WRITE_DATA, args, 5);
+  return runCommandFlush(cam, VC0706_WRITE_DATA, args, 5);
 }
 
 bool getMotionDetect (Camera *cam) {
   uint8_t args[] = { 0x0 };
-  if (!runCommand(cam, VC0706_COMM_MOTION_STATUS, args, 6))
+  if (!runCommandFlush(cam, VC0706_COMM_MOTION_STATUS, args, 6))
     return false;
   return cam->buff[5];
 }
 
 uint8_t getMotionStatus(Camera *cam, uint8_t x) {
   uint8_t args[] = { 0x01, x };
-  return runCommand(cam, VC0706_MOTION_STATUS, args, 5);
+  return runCommandFlush(cam, VC0706_MOTION_STATUS, args, 5);
 }
 
 bool motionDetected (Camera *cam) {
@@ -197,29 +203,29 @@ bool setMotionDetect (Camera *cam, bool flag) {
   if (!setMotionStatus(cam, VC0706_MOTIONCONTROL, VC0706_UARTMOTION, VC0706_ACTIVATEMOTION))
     return false;
   uint8_t args[] = { 0x1, flag };
-  return runCommand(cam, VC0706_MOTION_STATUS, args, 5);
+  return runCommandFlush(cam, VC0706_MOTION_STATUS, args, 5);
 }
 
 bool setMotionStatus (Camera *cam, uint8_t x, uint8_t d1, uint8_t d2) {
   uint8_t args[] = { 0x03, x, d1, d2 };
-  return runCommand(cam, VC0706_MOTION_CTRL, args, 5);
+  return runCommandFlush(cam, VC0706_MOTION_CTRL, args, 5);
 }
 
 uint8_t getCompression (Camera *cam) {
   uint8_t args[] = { 0x4, 0x1, 0x1, 0x12, 0x04 };
-  runCommand(cam, VC0706_READ_DATA, args, 6);
+  runCommandFlush(cam, VC0706_READ_DATA, args, 6);
   return cam->buff[5];
 }
 
 bool setCompression (Camera *cam, uint8_t c) {
   uint8_t args[] = { 0x5, 0x1, 0x1, 0x12, 0x04, c };
-  return runCommand(cam, VC0706_WRITE_DATA, args, 5);
+  return runCommandFlush(cam, VC0706_WRITE_DATA, args, 5);
 }
 
 bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt) {
-  uint8_t args[] = {0x0};
+  uint8_t args[] ={ 0x0 };
 
-  if (!runCommand(cam, VC0706_GET_ZOOM, args, 16))
+  if (!runCommandFlush(cam, VC0706_GET_ZOOM, args, 16))
     return false;
   *w = cam->buff[5];
   *w <<= 8;
@@ -255,7 +261,7 @@ bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt) 
     pan>>8, pan,
     tilt>>8, tilt
   };
-  return !runCommand(cam, VC0706_SET_ZOOM, args, 5);
+  return !runCommandFlush(cam, VC0706_SET_ZOOM, args, 5);
 }
 
 bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
