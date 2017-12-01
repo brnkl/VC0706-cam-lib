@@ -1,3 +1,5 @@
+#ifndef CAMERA_H
+#define CAMERA_H
 #define VC0706_RESP_PREFIX 0x76
 #define VC0706_PREFIX 0x56
 #define VC0706_RESET  0x26
@@ -34,9 +36,9 @@
 #define VC0706_SET_ZOOM 0x52
 #define VC0706_GET_ZOOM 0x53
 
-#define BUFF_SIZE 100
-#define DELAY 10
-#define TIMEOUT 20
+#define CAM_BUFF_SIZE 100
+#define CAM_DELAY 10
+#define CAM_TIMEOUT 10
 #define CAM_SERIAL 0
 
 static const char SERIAL_PATH[] = "/dev/ttyHS0";
@@ -44,16 +46,15 @@ static const char SERIAL_PATH[] = "/dev/ttyHS0";
 typedef struct {
   int fd; // file descriptor for the serial port
   uint8_t serialNum; // camera serial number
-  uint8_t buff[BUFF_SIZE]; // uint8_t array to store camera data
+  uint8_t buff[CAM_BUFF_SIZE]; // uint8_t array to store camera data
   uint8_t bufferLen; // current length of data in buffer
   uint16_t frameptr;
 } Camera;
 
-void delay (unsigned int msecs);
-LE_SHARED int openCameraFd ();
-LE_SHARED void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]);
-LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen, bool flushFlag);
-LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], int respLen);
+LE_SHARED le_result_t openCameraFd ();
+LE_SHARED ssize_t sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs);
+LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen, bool flushFlag);
+LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen);
 LE_SHARED uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout);
 LE_SHARED void printBuffer (Camera *cam);
 LE_SHARED bool verifyResponse (Camera *cam, uint8_t cmd);
@@ -62,10 +63,10 @@ LE_SHARED bool takePicture (Camera *cam);
 LE_SHARED bool reset (Camera *cam);
 LE_SHARED bool TVon (Camera *cam);
 LE_SHARED bool TVOff (Camera *cam);
-LE_SHARED uint8_t *readPicture (Camera *cam, uint8_t n);
+LE_SHARED uint8_t* readPicture (Camera *cam, uint8_t n);
 LE_SHARED bool resumeVideo (Camera *cam);
 LE_SHARED uint32_t frameLength (Camera *cam);
-LE_SHARED char *getVersion (Camera *cam);
+LE_SHARED char* getVersion (Camera *cam);
 LE_SHARED uint8_t available (Camera *cam);
 LE_SHARED uint8_t getDownsize (Camera *cam);
 LE_SHARED bool setDownsize(Camera *cam, uint8_t newSize);
@@ -81,3 +82,5 @@ LE_SHARED bool setCompression(Camera *cam, uint8_t c);
 LE_SHARED bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt);
 LE_SHARED bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt);
 LE_SHARED bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize);
+
+#endif
