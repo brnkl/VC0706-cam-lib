@@ -1,73 +1,101 @@
-#include "legato.h"
-#include "interfaces.h"
 #include "camera.h"
 
 COMPONENT_INIT { }
 
 // File descriptor is returned in the fd pointer
-le_result_t openCameraFd (char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout) {
+le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout) {
   *fd = le_tty_Open(path, O_RDWR);
   le_result_t baudRes = le_tty_SetBaudRate(*fd, baud);
   le_result_t rawRes = le_tty_SetRaw(*fd, nBytes, timeout);
   return baudRes == LE_OK && rawRes == LE_OK ? LE_OK : LE_FAULT;
 }
 
-ssize_t sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs) {
-  LE_INFO("sizeof args: %d", nArgs);
-  uint8_t toWrite[100] = { VC0706_PREFIX, cam->serialNum, cmd };
-  int start = 3;
-  int end = nArgs + start;
-  for (int i = start; i < end; i++) {
-    toWrite[i] = args[i - start];
-  };
-  return write(cam->fd, &toWrite[0], end);
+// tty_ functions mostly lifted from here
+// https://github.com/oskarirauta/VC0706/blob/master/include/wiringSerial.c
+ssize_t tty_putByte (int fd, uint8_t byte) {
+  return write(fd, &byte, 1);
 }
 
-bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen, bool flushFlag) {
+int tty_getByte (int fd) {
+  uint8_t data;
+  if (read(fd, &data, 1) != 1)
+    return -1;
+  return ((int)data) & 0xFF;
+}
+
+int tty_dataAvail (int fd) {
+  int result;
+  return ioctl(fd, FIONREAD, &result) == -1 ? -1 : result;
+}
+
+void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs) {
+  tty_putByte(cam->fd, VC0706_PREFIX);
+  tty_putByte(cam->fd, cam->serialNum);
+  tty_putByte(cam->fd, cmd);
+  for (int i = 0; i < nArgs; i++) {
+    tty_putByte(cam->fd, args[i]);
+  }
+}
+
+bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag) {
   // flush out the buffer
   if (flushFlag) {
-    cam->bufferLen = 0;
-    fsync(cam->fd);
+    readResponse(cam, 100, 10);
   }
   sendCommand(cam, cmd, args, nArgs);
-  if (readResponse(cam, respLen, CAM_TIMEOUT) != respLen)
+  if (readResponse(cam, respLen, 200) != respLen)
     return false;
   if (!verifyResponse(cam, cmd))
     return false;
   return true;
 }
 
-bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen) {
+bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen) {
   return runCommand (cam, cmd, args, nArgs, respLen, true);
 }
 
 // Reads from the camera and returns how many bytes it read
-// TODO kill off un-needed timeout
-uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout) {
+uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
+  uint8_t counter = 0;
   cam->bufferLen = 0;
-  uint8_t *buffPtr = &(cam->buff[0]);
-  LE_INFO("Expecting %d bytes", nBytes);
-  ssize_t bytesRead = read(cam->fd, buffPtr, nBytes);
-  LE_INFO("Got %d bytes", bytesRead);
-  printBuffer(cam);
-  cam->bufferLen = bytesRead;
+  int avail, ch;
+  uint8_t numbytes = nBytes != 0 ? nBytes : 5;
+  while ((counter != timeout) && (cam->bufferLen != numbytes)) {
+    LE_DEBUG("counter: %d, timeout: %d, numbytes: %d, bufferLen: %d", counter, timeout, numbytes, cam->bufferLen);
+    avail = tty_dataAvail(cam->fd);
+    if (avail <= 0) {
+      usleep(1000);
+      counter++;
+      continue;
+    }
+    counter = 0;
+    ch = tty_getByte(cam->fd);
+    // no fucking idea what this does
+    // taken from here
+    // https://github.com/oskarirauta/VC0706/blob/master/include/wiringSerial.c
+    if ((nBytes == 0) && (cam->bufferLen == 4)) {
+      LE_DEBUG("oh no");
+      numbytes += ch;
+    }
+    cam->buff[cam->bufferLen++] = ch;
+  }
   return cam->bufferLen;
 }
 
 void printBuffer (Camera *cam) {
-  LE_INFO("Printing cam buffer");
+  LE_DEBUG("Printing cam buffer");
   for(int i = 0; i < NUM_ARRAY_MEMBERS(cam->buff); i++) {
-    LE_INFO("buff[%d]=%d", i, cam->buff[i]);
+    LE_DEBUG("buff[%d]=%d", i, cam->buff[i]);
   }
 }
 
 bool verifyResponse (Camera *cam, uint8_t cmd) {
   // If any of these are not equal than
   // the command failed
-  LE_INFO("buff[0] correct? %d", cam->buff[0] == VC0706_RESP_PREFIX);
-  LE_INFO("buff[1] correct? %d", cam->buff[1] == cam->serialNum);
-  LE_INFO("buff[2] correct? %d", cam->buff[2] == cmd);
-  LE_INFO("buff[3] correct? %d", cam->buff[3] == 0x0);
+  LE_DEBUG("buff[0] correct? %d", cam->buff[0] == VC0706_RESP_PREFIX);
+  LE_DEBUG("buff[1] correct? %d", cam->buff[1] == cam->serialNum);
+  LE_DEBUG("buff[2] correct? %d", cam->buff[2] == cmd);
+  LE_DEBUG("buff[3] correct? %d", cam->buff[3] == 0x0);
   return
     cam->buff[0] == VC0706_RESP_PREFIX &&
     cam->buff[1] == cam->serialNum &&
@@ -105,7 +133,7 @@ uint8_t* readPicture (Camera *cam, uint8_t n) {
     0, 0, cam->frameptr >> 8, cam->frameptr & 0xFF,
     0, 0, 0, n,
     CAM_DELAY >> 8, CAM_DELAY & 0xFF };
-  LE_INFO("Got dat frameptr: %d", cam->frameptr);
+  LE_DEBUG("frameptr: %d", cam->frameptr);
   if (!runCommand(cam, VC0706_READ_FBUF, args, sizeof(args), 5, false)) // don't flush
     return 0;
   if (readResponse(cam, n + 5, CAM_DELAY) == 0)
@@ -122,7 +150,6 @@ bool resumeVideo (Camera *cam) {
 
 uint32_t frameLength (Camera *cam) {
   uint8_t args[] = { 0x01, 0x00 };
-  // return 0 if this fails
   if (!runCommandFlush(cam, VC0706_GET_FBUF_LEN, args, sizeof(args), 9))
     return 0;
 
@@ -142,7 +169,7 @@ char* getVersion (Camera *cam) {
   uint8_t args[] = { 0x01 };
   sendCommand(cam, VC0706_GEN_VERSION, args, sizeof(args));
   if (!readResponse(cam, CAM_BUFF_SIZE, 200)) {
-    LE_INFO("Failed to get version, returning empty string");
+    LE_DEBUG("Failed to get version, returning empty string");
     return 0;
   }
   cam->buff[cam->bufferLen] = 0;
@@ -221,7 +248,7 @@ bool setCompression (Camera *cam, uint8_t c) {
 }
 
 bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt) {
-  uint8_t args[] ={ 0x0 };
+  uint8_t args[] = { 0x0 };
 
   if (!runCommandFlush(cam, VC0706_GET_ZOOM, args, sizeof(args), 16))
     return false;
@@ -276,13 +303,11 @@ bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
     if (filePtr != NULL) {
       LE_INFO("Got valid file pointer");
       int jpgLen = frameLength(cam);
-      LE_INFO("jpgLen: %d", jpgLen);
       while (jpgLen > 0) {
         uint8_t *buff;
-        uint8_t bytesToRead = 32 < jpgLen ? 32 : jpgLen;
-        LE_INFO("jpgLen: %d, bytesToRead: %d", jpgLen, bytesToRead);
+        uint8_t bytesToRead = CAM_BLOCK_SIZE < jpgLen ? CAM_BLOCK_SIZE : jpgLen;
+        LE_DEBUG("jpgLen: %d, bytesToRead: %d", jpgLen, bytesToRead);
         buff = readPicture(cam, bytesToRead);
-        LE_INFO("Made it past a photo data read");
         fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
         jpgLen -= bytesToRead;
       }

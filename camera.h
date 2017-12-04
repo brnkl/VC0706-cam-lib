@@ -1,5 +1,9 @@
 #ifndef CAMERA_H
 #define CAMERA_H
+
+#include "legato.h"
+#include "interfaces.h"
+
 #define VC0706_RESP_PREFIX 0x76
 #define VC0706_PREFIX 0x56
 #define VC0706_RESET  0x26
@@ -36,7 +40,8 @@
 #define VC0706_SET_ZOOM 0x52
 #define VC0706_GET_ZOOM 0x53
 
-#define CAM_BUFF_SIZE 100
+#define CAM_BUFF_SIZE 200
+#define CAM_BLOCK_SIZE 32
 #define CAM_DELAY 10
 #define CAM_TIMEOUT 10
 #define CAM_SERIAL 0
@@ -51,11 +56,11 @@ typedef struct {
   uint16_t frameptr;
 } Camera;
 
-LE_SHARED le_result_t openCameraFd ();
-LE_SHARED ssize_t sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs);
-LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen, bool flushFlag);
-LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], unsigned int nArgs, int respLen);
-LE_SHARED uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout);
+LE_SHARED le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout);
+LE_SHARED void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
+LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag);
+LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen);
+LE_SHARED uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout);
 LE_SHARED void printBuffer (Camera *cam);
 LE_SHARED bool verifyResponse (Camera *cam, uint8_t cmd);
 LE_SHARED bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd);
