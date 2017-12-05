@@ -27,12 +27,11 @@ The Legato serial API [`le_tty`](http://legato.io/legato-docs/latest/le__tty_8h.
 
 ## API
 ```c
-void delay (unsigned int msecs);
-LE_SHARED int openCameraFd ();
-LE_SHARED void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[]);
-LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], int respLen, bool flushFlag);
-LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], int respLen);
-LE_SHARED uint8_t readResponse (Camera *cam, unsigned int nBytes, unsigned int timeout);
+LE_SHARED le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout);
+LE_SHARED void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
+LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag);
+LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen);
+LE_SHARED uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout);
 LE_SHARED void printBuffer (Camera *cam);
 LE_SHARED bool verifyResponse (Camera *cam, uint8_t cmd);
 LE_SHARED bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd);
@@ -40,10 +39,10 @@ LE_SHARED bool takePicture (Camera *cam);
 LE_SHARED bool reset (Camera *cam);
 LE_SHARED bool TVon (Camera *cam);
 LE_SHARED bool TVOff (Camera *cam);
-LE_SHARED uint8_t *readPicture (Camera *cam, uint8_t n);
+LE_SHARED uint8_t* readPicture (Camera *cam, uint8_t n);
 LE_SHARED bool resumeVideo (Camera *cam);
 LE_SHARED uint32_t frameLength (Camera *cam);
-LE_SHARED char *getVersion (Camera *cam);
+LE_SHARED char* getVersion (Camera *cam);
 LE_SHARED uint8_t available (Camera *cam);
 LE_SHARED uint8_t getDownsize (Camera *cam);
 LE_SHARED bool setDownsize(Camera *cam, uint8_t newSize);
