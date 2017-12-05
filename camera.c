@@ -16,16 +16,12 @@ ssize_t tty_putByte (int fd, uint8_t byte) {
   return write(fd, &byte, 1);
 }
 
-int tty_getByte (int fd) {
-  uint8_t data;
-  if (read(fd, &data, 1) != 1)
-    return -1;
-  return ((int)data) & 0xFF;
+ssize_t tty_getByte (int fd, uint8_t *data) {
+  return read(fd, data, 1);
 }
 
-int tty_dataAvail (int fd) {
-  int result;
-  return ioctl(fd, FIONREAD, &result) == -1 ? -1 : result;
+int tty_dataAvail (int fd, int *data) {
+  return ioctl(fd, FIONREAD, data);
 }
 
 void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs) {
@@ -58,26 +54,22 @@ bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, u
 uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
   uint8_t counter = 0;
   cam->bufferLen = 0;
-  int avail, ch;
-  uint8_t numbytes = nBytes != 0 ? nBytes : 5;
-  while ((counter != timeout) && (cam->bufferLen != numbytes)) {
-    LE_DEBUG("counter: %d, timeout: %d, numbytes: %d, bufferLen: %d", counter, timeout, numbytes, cam->bufferLen);
-    avail = tty_dataAvail(cam->fd);
+  int avail;
+  uint8_t data;
+  while ((counter < timeout) && (cam->bufferLen < nBytes)) {
+    LE_DEBUG("counter: %d, timeout: %d, nBytes: %d, bufferLen: %d", counter, timeout, nBytes, cam->bufferLen);
+    // data is returned in avail pointer
+    tty_dataAvail(cam->fd, &avail);
+    // this case covers no data available
     if (avail <= 0) {
       usleep(1000);
       counter++;
       continue;
     }
+    // this case is when we get data
     counter = 0;
-    ch = tty_getByte(cam->fd);
-    // no fucking idea what this does
-    // taken from here
-    // https://github.com/oskarirauta/VC0706/blob/master/include/wiringSerial.c
-    if ((nBytes == 0) && (cam->bufferLen == 4)) {
-      LE_DEBUG("oh no");
-      numbytes += ch;
-    }
-    cam->buff[cam->bufferLen++] = ch;
+    tty_getByte(cam->fd, &data);
+    cam->buff[cam->bufferLen++] = data;
   }
   return cam->bufferLen;
 }
@@ -135,9 +127,9 @@ uint8_t* readPicture (Camera *cam, uint8_t n) {
     CAM_DELAY >> 8, CAM_DELAY & 0xFF };
   LE_DEBUG("frameptr: %d", cam->frameptr);
   if (!runCommand(cam, VC0706_READ_FBUF, args, sizeof(args), 5, false)) // don't flush
-    return 0;
+    return NULL;
   if (readResponse(cam, n + 5, CAM_DELAY) == 0)
-    return 0;
+    return NULL;
 
   cam->frameptr += n;
 
@@ -292,6 +284,7 @@ bool setPTZ (Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt)
 bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
   setImageSize(cam, imgSize);
   LE_INFO("Taking photo...");
+  bool success = true;
   bool photoTaken = takePicture(cam);
   if (photoTaken) {
     LE_INFO("Photo taken");
@@ -308,11 +301,16 @@ bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
         uint8_t bytesToRead = CAM_BLOCK_SIZE < jpgLen ? CAM_BLOCK_SIZE : jpgLen;
         LE_DEBUG("jpgLen: %d, bytesToRead: %d", jpgLen, bytesToRead);
         buff = readPicture(cam, bytesToRead);
+        if (buff == NULL) {
+          LE_ERROR("Failed to read image data");
+          success = false;
+          break;
+        }
         fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
         jpgLen -= bytesToRead;
       }
       fclose(filePtr);
-      return true;
+      return success;
     }
     else {
       LE_ERROR("Invalid file pointer for %s", writePath);
