@@ -43,10 +43,10 @@
 #define CAM_BUFF_SIZE 200
 #define CAM_BLOCK_SIZE 32
 #define CAM_DELAY 10
-#define CAM_TIMEOUT 10
 #define CAM_SERIAL 0
+#define TTY_TIMEOUT 10
 
-static const char SERIAL_PATH[] = "/dev/ttyHS0";
+static const char TTY_PATH[] = "/dev/ttyHS0";
 
 typedef struct {
   int fd; // file descriptor for the serial port
