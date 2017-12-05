@@ -1,9 +1,26 @@
 # VC0706-cam-lib-legato
-Library for the Adafruit VC0706 camera used on Legato devices. The majority of this code is ported from Adafruit's [Adafruit-VC0706-Serial-Camera-Library](https://github.com/adafruit/Adafruit-VC0706-Serial-Camera-Library) repository with some C/Legato specific changes.
+Library for the Adafruit VC0706 camera used on Legato devices.
+
+## Credit
+The majority of this code is ported from Adafruit's [Adafruit-VC0706-Serial-Camera-Library](https://github.com/adafruit/Adafruit-VC0706-Serial-Camera-Library) repository with some C/Legato specific changes.
+
+This is a library for the Adafruit TTL JPEG Camera (VC0706 chipset)
+
+Pick one up today in the adafruit shop!
+------> http://www.adafruit.com/products/397
+
+These displays use Serial to communicate, 2 pins are required to interface
+
+Adafruit invests time and resources providing this open source code,
+please support Adafruit and open-source hardware by purchasing
+products from Adafruit!
+
+Original code written by Limor Fried/Ladyada for Adafruit Industries.
+BSD license, all text above must be included in any redistribution
 
 ## Project Status
 
-Still incomplete and not functional. We are hoping to release 1.0.0 in the coming days.
+Still incomplete and not functional. We are currently experiencing some issues reading a complete image off the camera after taking a photo. The code is currently riddled with debug log statements but these will be cleaned up prior to release `1.0.0`
 
 ## Usage on Other Platforms
 The Legato serial API [`le_tty`](http://legato.io/legato-docs/latest/le__tty_8h.html) returns a file descriptor used to read and write. The file descriptor in the `Camera` struct can be replaced with any other file descriptor serial interface.
