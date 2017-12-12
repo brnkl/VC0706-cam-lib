@@ -44,7 +44,7 @@
 #define CAM_BLOCK_SIZE 32
 #define CAM_DELAY 10
 #define CAM_SERIAL 0
-#define TTY_TIMEOUT 10
+#define TTY_TIMEOUT 5000
 
 static const char TTY_PATH[] = "/dev/ttyHS0";
 
@@ -86,6 +86,9 @@ LE_SHARED uint8_t getCompression (Camera *cam);
 LE_SHARED bool setCompression(Camera *cam, uint8_t c);
 LE_SHARED bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt);
 LE_SHARED bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt);
+uint8_t getImageBlockSize (int jpgLen);
+bool readImageBlock (Camera *cam, FILE *filePtr);
+bool readImageToFile (Camera *cam, char *path);
 LE_SHARED bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize);
 
 #endif

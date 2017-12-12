@@ -4,42 +4,41 @@ COMPONENT_INIT { }
 
 // File descriptor is returned in the fd pointer
 le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout) {
-  *fd = le_tty_Open(path, O_RDWR);
+  *fd = le_tty_Open(path, O_RDWR | O_NOCTTY | O_NDELAY);
   le_result_t baudRes = le_tty_SetBaudRate(*fd, baud);
   le_result_t rawRes = le_tty_SetRaw(*fd, nBytes, timeout);
   return baudRes == LE_OK && rawRes == LE_OK ? LE_OK : LE_FAULT;
 }
 
-// tty_ functions mostly lifted from here
-// https://github.com/oskarirauta/VC0706/blob/master/include/wiringSerial.c
-ssize_t tty_putByte (int fd, uint8_t byte) {
-  return write(fd, &byte, 1);
-}
-
-ssize_t tty_getByte (int fd, uint8_t *data) {
+ssize_t fd_getByte (int fd, uint8_t *data) {
   return read(fd, data, 1);
 }
 
-int tty_dataAvail (int fd, int *data) {
+int fd_dataAvail (int fd, int *data) {
   return ioctl(fd, FIONREAD, data);
 }
 
 void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs) {
-  tty_putByte(cam->fd, VC0706_PREFIX);
-  tty_putByte(cam->fd, cam->serialNum);
-  tty_putByte(cam->fd, cmd);
-  for (int i = 0; i < nArgs; i++) {
-    tty_putByte(cam->fd, args[i]);
+  uint8_t toWrite[100] = { VC0706_PREFIX, cam->serialNum, cmd };
+  int start = 3;
+  int end = nArgs + start;
+  for (int i = start; i < end; i++) {
+    toWrite[i] = args[i - start];
+  };
+  for (int i = 0; i < end; i++) {
+    LE_DEBUG("toSend[%d]=0x%x", i, toWrite[i]);
   }
+  write(cam->fd, &toWrite[0], end);
 }
 
 bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag) {
-  // flush out the buffer
   if (flushFlag) {
     readResponse(cam, 100, 10);
   }
   sendCommand(cam, cmd, args, nArgs);
-  if (readResponse(cam, respLen, 200) != respLen)
+  uint8_t actual = readResponse(cam, respLen, 200);
+  LE_DEBUG("Expected: %d, Actual: %d", respLen, actual);
+  if (actual != respLen)
     return false;
   if (!verifyResponse(cam, cmd))
     return false;
@@ -47,7 +46,7 @@ bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_
 }
 
 bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen) {
-  return runCommand (cam, cmd, args, nArgs, respLen, true);
+  return runCommand(cam, cmd, args, nArgs, respLen, true);
 }
 
 // Reads from the camera and returns how many bytes it read
@@ -57,9 +56,8 @@ uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
   int avail;
   uint8_t data;
   while ((counter < timeout) && (cam->bufferLen < nBytes)) {
-    LE_DEBUG("counter: %d, timeout: %d, nBytes: %d, bufferLen: %d", counter, timeout, nBytes, cam->bufferLen);
     // data is returned in avail pointer
-    tty_dataAvail(cam->fd, &avail);
+    fd_dataAvail(cam->fd, &avail);
     // this case covers no data available
     if (avail <= 0) {
       usleep(1000);
@@ -68,7 +66,7 @@ uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
     }
     // this case is when we get data
     counter = 0;
-    tty_getByte(cam->fd, &data);
+    fd_getByte(cam->fd, &data);
     cam->buff[cam->bufferLen++] = data;
   }
   return cam->bufferLen;
@@ -126,11 +124,16 @@ uint8_t* readPicture (Camera *cam, uint8_t n) {
     0, 0, 0, n,
     CAM_DELAY >> 8, CAM_DELAY & 0xFF };
   LE_DEBUG("frameptr: %d", cam->frameptr);
-  if (!runCommand(cam, VC0706_READ_FBUF, args, sizeof(args), 5, false)) // don't flush
+  if (!runCommand(cam, VC0706_READ_FBUF, args, sizeof(args), 5, false)) { // don't flush
+    LE_DEBUG("Failed in runCommand");
     return NULL;
-  if (readResponse(cam, n + 5, CAM_DELAY) == 0)
+  }
+  int imgDataRead = readResponse(cam, n + 5, CAM_DELAY);
+  LE_DEBUG("Image data read: %d", imgDataRead);
+  if (imgDataRead == 0) {
+    LE_DEBUG("Failed in readResponse");
     return NULL;
-
+  }
   cam->frameptr += n;
 
   return &(cam->buff[0]);
@@ -158,14 +161,14 @@ uint32_t frameLength (Camera *cam) {
 }
 
 char* getVersion (Camera *cam) {
-  uint8_t args[] = { 0x01 };
+  uint8_t args[] = { 0x00 };
   sendCommand(cam, VC0706_GEN_VERSION, args, sizeof(args));
   if (!readResponse(cam, CAM_BUFF_SIZE, 200)) {
     LE_DEBUG("Failed to get version, returning empty string");
     return 0;
   }
   cam->buff[cam->bufferLen] = 0;
-  return (char*)&(cam->buff[0]);
+  return (char*)&(cam->buff[5]);
 }
 
 uint8_t available (Camera *cam) {
@@ -281,41 +284,53 @@ bool setPTZ (Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt)
   return !runCommandFlush(cam, VC0706_SET_ZOOM, args, sizeof(args), 5);
 }
 
+uint8_t getImageBlockSize (int jpgLen) {
+  return CAM_BLOCK_SIZE < jpgLen ? CAM_BLOCK_SIZE : jpgLen;
+}
+
+bool readImageBlock (Camera *cam, FILE *filePtr) {
+  int jpgLen = frameLength(cam);
+  bool success = true;
+  while (jpgLen > 0) {
+    uint8_t bytesToRead = getImageBlockSize(jpgLen);
+    LE_DEBUG("jpgLen: %d, bytesToRead: %d", jpgLen, bytesToRead);
+    uint8_t *buff = readPicture(cam, bytesToRead);
+    if (buff == NULL) {
+      LE_ERROR("Failed to read image data");
+      success = false;
+      break;
+    }
+    fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
+    jpgLen -= bytesToRead;
+    sleep(3);
+  }
+  fclose(filePtr);
+  return success;
+}
+
+bool readImageToFile (Camera *cam, char *path) {
+  char writePath[100];
+  // e.g /mnt/sd/<timestamp>.jpg
+  sprintf(writePath, "%s/%d.jpg", path, (int)time(0));
+  LE_INFO("Opening file pointer for path %s", writePath);
+  FILE *filePtr = fopen(writePath, "w");
+  if (filePtr != NULL) {
+    LE_INFO("Got valid file pointer");
+    return readImageBlock(cam, filePtr);
+  }
+  else {
+    LE_ERROR("Invalid file pointer for %s", writePath);
+    return false;
+  }
+}
+
 bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
   setImageSize(cam, imgSize);
   LE_INFO("Taking photo...");
-  bool success = true;
   bool photoTaken = takePicture(cam);
   if (photoTaken) {
     LE_INFO("Photo taken");
-    char writePath[100];
-    // e.g /mnt/sd/<timestamp>.jpg
-    sprintf(writePath, "%s/%d.jpg", path, (int)time(0));
-    LE_INFO("Opening file pointer for path %s", writePath);
-    FILE *filePtr = fopen(writePath, "w");
-    if (filePtr != NULL) {
-      LE_INFO("Got valid file pointer");
-      int jpgLen = frameLength(cam);
-      while (jpgLen > 0) {
-        uint8_t *buff;
-        uint8_t bytesToRead = CAM_BLOCK_SIZE < jpgLen ? CAM_BLOCK_SIZE : jpgLen;
-        LE_DEBUG("jpgLen: %d, bytesToRead: %d", jpgLen, bytesToRead);
-        buff = readPicture(cam, bytesToRead);
-        if (buff == NULL) {
-          LE_ERROR("Failed to read image data");
-          success = false;
-          break;
-        }
-        fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
-        jpgLen -= bytesToRead;
-      }
-      fclose(filePtr);
-      return success;
-    }
-    else {
-      LE_ERROR("Invalid file pointer for %s", writePath);
-      return false;
-    }
+    return readImageToFile(cam, path);
   }
   else {
     LE_ERROR("Failed to take photo");
