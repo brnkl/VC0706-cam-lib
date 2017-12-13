@@ -12,7 +12,7 @@ le_result_t fd_openCam (int *fd) {
 }
 
 void fd_closeCam (int fd) {
-  return le_tty_Close(fd);
+  le_tty_Close(fd);
 }
 
 le_result_t fd_resetCamTty (int *fd) {
