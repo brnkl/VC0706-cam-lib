@@ -27,13 +27,23 @@ The Legato serial API [`le_tty`](http://legato.io/legato-docs/latest/le__tty_8h.
 
 ## API
 ```c
-LE_SHARED le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout);
-LE_SHARED void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
-LE_SHARED bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag);
-LE_SHARED bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen);
-LE_SHARED uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout);
+// File descriptor helpers
+LE_SHARED le_result_t fd_openCam (int *fd);
+LE_SHARED void fd_closeCam (int fd);
+LE_SHARED le_result_t fd_resetCamTty (int *fd);
+ssize_t fd_getByte (int fd, uint8_t *data);
+ssize_t fd_dataAvail (int fd, int *data);
+
+// Camera communication functions
+void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
+bool runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag);
+bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen);
+uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout);
+bool verifyResponse (Camera *cam, uint8_t cmd);
+
+// High level commands to be called by
+// another component that requires this one
 LE_SHARED void printBuffer (Camera *cam);
-LE_SHARED bool verifyResponse (Camera *cam, uint8_t cmd);
 LE_SHARED bool cameraFrameBuffCtrl (Camera *cam, uint8_t cmd);
 LE_SHARED bool takePicture (Camera *cam);
 LE_SHARED bool reset (Camera *cam);
@@ -57,6 +67,11 @@ LE_SHARED uint8_t getCompression (Camera *cam);
 LE_SHARED bool setCompression(Camera *cam, uint8_t c);
 LE_SHARED bool getPTZ(Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt);
 LE_SHARED bool setPTZ(Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt);
+
+// File stream functions for reading photos
+uint8_t getImageBlockSize (int jpgLen);
+bool readImageBlock (Camera *cam, FILE *filePtr);
+bool readImageToFile (Camera *cam, char *path);
 LE_SHARED bool snapshotToFile (Camera *cam, char *path, uint8_t imgSize);
 ```
 
