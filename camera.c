@@ -1,13 +1,23 @@
 #include "camera.h"
+#include "legato.h"
 
 COMPONENT_INIT { }
 
 // File descriptor is returned in the fd pointer
-le_result_t openCameraFd (const char *path, int *fd, tty_Speed_t baud, int nBytes, int timeout) {
-  *fd = le_tty_Open(path, O_RDWR | O_NOCTTY | O_NDELAY);
-  le_result_t baudRes = le_tty_SetBaudRate(*fd, baud);
-  le_result_t rawRes = le_tty_SetRaw(*fd, nBytes, timeout);
+le_result_t fd_openCam (int *fd) {
+  *fd = le_tty_Open(TTY_PATH, O_RDWR | O_NOCTTY | O_NDELAY);
+  le_result_t baudRes = le_tty_SetBaudRate(*fd, LE_TTY_SPEED_38400);
+  le_result_t rawRes = le_tty_SetRaw(*fd, CAM_BUFF_SIZE, TTY_TIMEOUT);
   return baudRes == LE_OK && rawRes == LE_OK ? LE_OK : LE_FAULT;
+}
+
+void fd_closeCam (int fd) {
+  return le_tty_Close(fd);
+}
+
+le_result_t fd_resetCamTty (int *fd) {
+  fd_closeCam(*fd);
+  return fd_openCam(fd);
 }
 
 ssize_t fd_getByte (int fd, uint8_t *data) {
@@ -19,6 +29,11 @@ int fd_dataAvail (int fd, int *data) {
 }
 
 void sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs) {
+  // TODO figure out the longest possible command
+  // as I doubt it's anywhere near 100
+  //
+  // The other (and probably better option) here would
+  // be to call malloc
   uint8_t toWrite[100] = { VC0706_PREFIX, cam->serialNum, cmd };
   int start = 3;
   int end = nArgs + start;
@@ -53,21 +68,22 @@ bool runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, u
 uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
   uint8_t counter = 0;
   cam->bufferLen = 0;
-  int avail;
+  int avail = 0;
   uint8_t data;
   while ((counter < timeout) && (cam->bufferLen < nBytes)) {
     // data is returned in avail pointer
-    fd_dataAvail(cam->fd, &avail);
+    int availRes = fd_dataAvail(cam->fd, &avail);
     // this case covers no data available
-    if (avail <= 0) {
+    // or when fd_dataAvail fails
+    if (avail <= 0 || availRes != 0) {
       usleep(1000);
       counter++;
       continue;
     }
     // this case is when we get data
     counter = 0;
-    fd_getByte(cam->fd, &data);
-    cam->buff[cam->bufferLen++] = data;
+    ssize_t bytesRead = fd_getByte(cam->fd, &data);
+    if (bytesRead > 0) cam->buff[cam->bufferLen++] = data;
   }
   return cam->bufferLen;
 }
@@ -75,7 +91,7 @@ uint8_t readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
 void printBuffer (Camera *cam) {
   LE_DEBUG("Printing cam buffer");
   for(int i = 0; i < NUM_ARRAY_MEMBERS(cam->buff); i++) {
-    LE_DEBUG("buff[%d]=%d", i, cam->buff[i]);
+    LE_DEBUG("buff[%d]=%x", i, cam->buff[i]);
   }
 }
 
@@ -302,9 +318,16 @@ bool readImageBlock (Camera *cam, FILE *filePtr) {
     }
     fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
     jpgLen -= bytesToRead;
-    sleep(3);
+    // TODO figure out why resetting the resetting
+    // the serial connection after reading a block
+    // keeps the camera responsive
+    //
+    // This may be a limitation in le_tty
+    // so using Linux system calls may be worthwhile
+    fd_resetCamTty(&(cam->fd));
   }
   fclose(filePtr);
+  printBuffer(cam);
   return success;
 }
 
