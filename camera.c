@@ -443,7 +443,9 @@ uint8_t cam_getImageBlockSize (int jpgLen) {
  */
 bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
   int jpgLen = cam_frameLength(cam);
+  int imgSize = jpgLen;
   bool success = true;
+  int nWrites = 0;
   while (jpgLen > 0) {
     uint8_t bytesToRead = cam_getImageBlockSize(jpgLen);
     uint8_t *buff = cam_readPicture(cam, bytesToRead);
@@ -453,6 +455,10 @@ bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
       break;
     }
     fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
+    if (++nWrites % 10 == 0) {
+      double percentComplete = (double)cam->bufferLen * 100.0 / (double)imgSize;
+      LE_INFO("Image write %f%% complete (%d bytes of %d bytes)",percentComplete, cam->bufferLen, imgSize);
+    }
     jpgLen -= bytesToRead;
   }
   return success;
@@ -470,13 +476,14 @@ bool cam_readImageToFile (Camera *cam, char *path) {
   LE_INFO("Opening file pointer for path %s", writePath);
   FILE *filePtr = fopen(writePath, "w");
   if (filePtr != NULL) {
-    LE_INFO("Got valid file pointer");
+    LE_INFO("File pointer valid");
     success = cam_readImageBlocks(cam, filePtr);
+    if (success) LE_INFO("Successfully wrote image to %s", writePath);
+    else LE_INFO("Failed to write photo data to %s", writePath);
   }
   else {
     LE_ERROR("Invalid file pointer for %s", writePath);
   }
-  LE_INFO("Done writing image");
   fclose(filePtr);
   return success;
 }
