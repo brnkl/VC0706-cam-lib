@@ -444,61 +444,65 @@ uint8_t cam_getImageBlockSize (int jpgLen) {
 bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
   int jpgLen = cam_frameLength(cam);
   int imgSize = jpgLen;
-  bool success = true;
   int nWrites = 0;
+  int totalDataRead = 0;
   while (jpgLen > 0) {
     uint8_t bytesToRead = cam_getImageBlockSize(jpgLen);
     uint8_t *buff = cam_readPicture(cam, bytesToRead);
     if (buff == NULL) {
       LE_ERROR("Failed to read image data");
-      success = false;
-      break;
+      return false;
     }
+    totalDataRead += bytesToRead;
     fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
-    if (++nWrites % 10 == 0) {
-      double percentComplete = (double)cam->bufferLen * 100.0 / (double)imgSize;
-      LE_INFO("Image write %f%% complete (%d bytes of %d bytes)",percentComplete, cam->bufferLen, imgSize);
+    if (++nWrites % 30 == 0) {
+      double percentComplete = (double)totalDataRead * 100.0 / (double)imgSize;
+      LE_INFO("Image write %f%% complete", percentComplete);
     }
     jpgLen -= bytesToRead;
   }
-  return success;
+  return true;
 }
 
 /**
  * Read the image from cam into a file
  * described by path
  */
-bool cam_readImageToFile (Camera *cam, char *path) {
+bool cam_readImageToFile (Camera *cam, const char *path, char *imgPath) {
   bool success = false;
-  char writePath[100];
   // e.g /mnt/sd/<timestamp>.jpg
-  sprintf(writePath, "%s/%d.jpg", path, (int)time(0));
-  LE_INFO("Opening file pointer for path %s", writePath);
-  FILE *filePtr = fopen(writePath, "w");
+  sprintf(imgPath, "%s/%d.jpg", path, (int)time(0));
+  LE_INFO("Opening file pointer for path %s", imgPath);
+  FILE *filePtr = fopen(imgPath, "w");
   if (filePtr != NULL) {
     LE_INFO("File pointer valid");
     success = cam_readImageBlocks(cam, filePtr);
-    if (success) LE_INFO("Successfully wrote image to %s", writePath);
-    else LE_INFO("Failed to write photo data to %s", writePath);
+    if (success) LE_INFO("Successfully wrote image to %s", imgPath);
+    else LE_INFO("Failed to write photo data to %s", imgPath);
+    fclose(filePtr);
   }
   else {
-    LE_ERROR("Invalid file pointer for %s", writePath);
+    LE_ERROR("Invalid file pointer for %s", imgPath);
   }
-  fclose(filePtr);
   return success;
 }
 
 /**
  * Take a photo on cam and write it to a file
  * described by path
+ *
+ * The path to the new image is returned
+ * in imgPath (assuming true is returned)
  */
-bool cam_snapshotToFile (Camera *cam, char *path, uint8_t imgSize) {
+bool cam_snapshotToFile (Camera *cam, const char *path, uint8_t imgSize, char *imgPath) {
   cam_setImageSize(cam, imgSize);
   LE_INFO("Taking photo...");
   bool photoTaken = cam_takePicture(cam);
   if (photoTaken) {
     LE_INFO("Photo taken");
-    return cam_readImageToFile(cam, path);
+    bool res = cam_readImageToFile(cam, path, imgPath);
+    cam_resumeVideo(cam);
+    return res;
   }
   else {
     LE_ERROR("Failed to take photo");
