@@ -40,8 +40,8 @@
 #define VC0706_SET_ZOOM 0x52
 #define VC0706_GET_ZOOM 0x53
 
-#define CAM_BUFF_SIZE 100
-#define CAM_BLOCK_SIZE 32
+#define CAM_BUFF_SIZE 200
+#define CAM_BLOCK_SIZE 192
 #define CAM_DELAY 10
 #define CAM_SERIAL 0
 #define CAM_BAUD_RATE 38400
@@ -58,9 +58,9 @@ typedef struct {
 } Camera;
 
 // File stream functions for reading photos
-LE_SHARED bool cam_snapshotToFile (Camera *cam, char *path,uint8_t imgSize);
-bool cam_readImageToFile (Camera *cam, char *path);
-bool cam_readImageBlock (Camera *cam, FILE *filePtr);
+LE_SHARED bool cam_snapshotToFile (Camera *cam, const char *path, uint8_t imgSize, char *imgPath);
+bool cam_readImageToFile (Camera *cam, const char *path, char *imgPath);
+bool cam_readImageBlocks (Camera *cam, FILE *filePtr);
 uint8_t cam_getImageBlockSize (int jpgLen);
 
 // Higher level commands
