@@ -68,9 +68,9 @@ COMPONENT_INIT {
 ## API
 ```c
 // File stream functions for reading photos
-LE_SHARED bool cam_snapshotToFile (Camera *cam, char *path,uint8_t imgSize);
-bool cam_readImageToFile (Camera *cam, char *path);
-bool cam_readImageBlock (Camera *cam, FILE *filePtr);
+LE_SHARED bool cam_snapshotToFile (Camera *cam, const char *path, uint8_t imgSize, char *imgPath);
+bool cam_readImageToFile (Camera *cam, const char *path, char *imgPath);
+bool cam_readImageBlocks (Camera *cam, FILE *filePtr);
 uint8_t cam_getImageBlockSize (int jpgLen);
 
 // Higher level commands
