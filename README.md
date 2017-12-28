@@ -20,6 +20,11 @@ BSD license, all text above must be included in any redistribution
 
 ## Releases
 
+### 1.0.1
+Released on December 27, 2017
+
+View the full details here [here](https://github.com/brnkl/VC0706-cam-lib-legato/releases/tag/1.0.1)
+
 ### 1.0.0
 Released on December 16, 2017
 
