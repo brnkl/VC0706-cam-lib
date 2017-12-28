@@ -445,7 +445,6 @@ bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
   int jpgLen = cam_frameLength(cam);
   int imgSize = jpgLen;
   int nWrites = 0;
-  int totalDataRead = 0;
   while (jpgLen > 0) {
     uint8_t bytesToRead = cam_getImageBlockSize(jpgLen);
     uint8_t *buff = cam_readPicture(cam, bytesToRead);
@@ -453,10 +452,10 @@ bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
       LE_ERROR("Failed to read image data");
       return false;
     }
-    totalDataRead += bytesToRead;
     fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
+    // give progress every 30 writes
     if (++nWrites % 30 == 0) {
-      double percentComplete = (double)totalDataRead * 100.0 / (double)imgSize;
+      double percentComplete = (double)imgSize - jpgLen * 100.0 / (double)imgSize;
       LE_INFO("Image write %f%% complete", percentComplete);
     }
     jpgLen -= bytesToRead;
