@@ -455,7 +455,7 @@ bool cam_readImageBlocks (Camera *cam, FILE *filePtr) {
     fwrite(buff, sizeof(*buff), bytesToRead, filePtr);
     // give progress every 30 writes
     if (++nWrites % 30 == 0) {
-      double percentComplete = (double)imgSize - jpgLen * 100.0 / (double)imgSize;
+      double percentComplete = ((double)imgSize - jpgLen) * 100.0 / (double)imgSize;
       LE_INFO("Image write %f%% complete", percentComplete);
     }
     jpgLen -= bytesToRead;
