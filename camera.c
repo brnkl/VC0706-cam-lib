@@ -60,7 +60,7 @@ int fd_openSerial (const char *device, int baud) {
   options.c_oflag &= ~OPOST;
 
   options.c_cc[VMIN]  = 0;
-  options.c_cc[VTIME] = 100;	// Ten seconds (100 deciseconds)
+  options.c_cc[VTIME] = 100; // Ten seconds (100 deciseconds)
 
   tcsetattr(fd, TCSANOW | TCSAFLUSH, &options);
 
@@ -70,7 +70,7 @@ int fd_openSerial (const char *device, int baud) {
   status |= TIOCM_RTS;
 
   ioctl(fd, TIOCMSET, &status);
-  usleep(10000);	// 10mS
+  usleep(10000); // 10mS
   return fd;
 }
 
@@ -90,6 +90,9 @@ int fd_closeCam (int fd) {
 
 /**
  * Read a byte from fd into data
+ *
+ * TODO This sub-routine could be removed
+ * (see cam_readResponse comment)
  */
 ssize_t fd_getByte (int fd, uint8_t *data) {
   return read(fd, data, 1);
@@ -111,11 +114,11 @@ void cam_sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs) {
   int start = 3;
   int end = nArgs + start;
   uint8_t *toWrite = malloc(end);
-  *toWrite = VC0706_PREFIX;
-  *(toWrite + 1) = cam->serialNum;
-  *(toWrite + 2) = cmd;
+  toWrite[0] = VC0706_PREFIX;
+  toWrite[1] = cam->serialNum;
+  toWrite[2] = cmd;
   for (int i = start; i < end; i++) {
-    *(toWrite + i) = args[i - start];
+    toWrite[i] = args[i - start];
   };
   write(cam->fd, toWrite, end);
   free(toWrite);
@@ -145,6 +148,12 @@ bool cam_runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArg
 
 /**
  * Read a response from cam
+ *
+ * TODO This sub-routine reads 1 byte at a time
+ * (this was useful for debugging), but this is
+ * not required. I performance could be
+ * improved by reading `avail` bytes
+ * at a time
  */
 uint8_t cam_readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout) {
   uint8_t counter = 0;
@@ -239,7 +248,7 @@ uint8_t* cam_readPicture (Camera *cam, uint8_t n) {
     return NULL;
   cam->frameptr += n;
 
-  return &(cam->buff[0]);
+  return &cam->buff[0];
 }
 
 /**
@@ -279,7 +288,7 @@ char* cam_getVersion (Camera *cam) {
   if (!cam_readResponse(cam, CAM_BUFF_SIZE, 200))
     return NULL;
   cam->buff[cam->bufferLen] = 0;
-  return (char*)&(cam->buff[5]);
+  return (char*)&cam->buff[5];
 }
 
 /**
