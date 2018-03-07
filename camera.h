@@ -6,7 +6,7 @@
 
 #define VC0706_RESP_PREFIX 0x76
 #define VC0706_PREFIX 0x56
-#define VC0706_RESET  0x26
+#define VC0706_RESET 0x26
 #define VC0706_GEN_VERSION 0x11
 #define VC0706_SET_PORT 0x24
 #define VC0706_READ_FBUF 0x32
@@ -50,57 +50,82 @@
 static const char TTY_PATH[] = "/dev/ttyHS0";
 
 typedef struct {
-  int fd; // file descriptor for the serial port
-  uint8_t serialNum; // camera serial number
-  uint8_t buff[CAM_BUFF_SIZE]; // uint8_t array to store camera data
-  uint8_t bufferLen; // current length of data in buffer
+  int fd;                       // file descriptor for the serial port
+  uint8_t serialNum;            // camera serial number
+  uint8_t buff[CAM_BUFF_SIZE];  // uint8_t array to store camera data
+  uint8_t bufferLen;            // current length of data in buffer
   uint16_t frameptr;
 } Camera;
 
 // File stream functions for reading photos
-LE_SHARED bool cam_snapshotToFile (Camera *cam, const char *path, uint8_t imgSize, char *imgPath);
-bool cam_readImageToFile (Camera *cam, const char *path, char *imgPath);
-bool cam_readImageBlocks (Camera *cam, FILE *filePtr);
-uint8_t cam_getImageBlockSize (int jpgLen);
+LE_SHARED bool cam_snapshotToFile(Camera* cam,
+                                  const char* path,
+                                  uint8_t imgSize,
+                                  char* imgPath);
+bool cam_readImageToFile(Camera* cam, const char* path, char* imgPath);
+bool cam_readImageBlocks(Camera* cam, FILE* filePtr);
+uint8_t cam_getImageBlockSize(int jpgLen);
 
 // Higher level commands
-LE_SHARED bool cam_setPTZ (Camera *cam, uint16_t wz, uint16_t hz, uint16_t pan, uint16_t tilt);
-LE_SHARED bool cam_getPTZ (Camera *cam, uint16_t *w, uint16_t *h, uint16_t *wz, uint16_t *hz, uint16_t *pan, uint16_t *tilt);
-LE_SHARED bool cam_setCompression (Camera *cam, uint8_t c);
-LE_SHARED uint8_t cam_getCompression (Camera *cam);
-LE_SHARED bool cam_setMotionStatus (Camera *cam, uint8_t x, uint8_t d1, uint8_t d2);
-LE_SHARED bool cam_setMotionDetect (Camera *cam, bool flag);
-LE_SHARED bool cam_motionDetected (Camera *cam);
-LE_SHARED uint8_t cam_getMotionStatus (Camera *cam, uint8_t x);
-LE_SHARED bool cam_getMotionDetect (Camera *cam);
-LE_SHARED bool cam_setImageSize (Camera *cam,uint8_t x);
-LE_SHARED uint8_t cam_getImageSize (Camera *cam);
-LE_SHARED bool cam_setDownsize (Camera *cam, uint8_t newSize);
-LE_SHARED uint8_t cam_getDownsize (Camera *cam);
-LE_SHARED uint8_t cam_available (Camera *cam);
-LE_SHARED char *cam_getVersion (Camera *cam);
-LE_SHARED uint32_t cam_frameLength (Camera *cam);
-LE_SHARED bool cam_resumeVideo (Camera *cam);
-LE_SHARED uint8_t *cam_readPicture (Camera *cam, uint8_t n);
-LE_SHARED bool cam_tvOff (Camera *cam);
-LE_SHARED bool cam_tvOn(Camera *cam);
-LE_SHARED bool cam_reset(Camera *cam);
-LE_SHARED bool cam_takePicture(Camera *cam);
-LE_SHARED bool cam_frameBuffCtrl(Camera *cam, uint8_t cmd);
+LE_SHARED bool cam_setPTZ(Camera* cam,
+                          uint16_t wz,
+                          uint16_t hz,
+                          uint16_t pan,
+                          uint16_t tilt);
+LE_SHARED bool cam_getPTZ(Camera* cam,
+                          uint16_t* w,
+                          uint16_t* h,
+                          uint16_t* wz,
+                          uint16_t* hz,
+                          uint16_t* pan,
+                          uint16_t* tilt);
+LE_SHARED bool cam_setCompression(Camera* cam, uint8_t c);
+LE_SHARED uint8_t cam_getCompression(Camera* cam);
+LE_SHARED bool cam_setMotionStatus(Camera* cam,
+                                   uint8_t x,
+                                   uint8_t d1,
+                                   uint8_t d2);
+LE_SHARED bool cam_setMotionDetect(Camera* cam, bool flag);
+LE_SHARED bool cam_motionDetected(Camera* cam);
+LE_SHARED uint8_t cam_getMotionStatus(Camera* cam, uint8_t x);
+LE_SHARED bool cam_getMotionDetect(Camera* cam);
+LE_SHARED bool cam_setImageSize(Camera* cam, uint8_t x);
+LE_SHARED uint8_t cam_getImageSize(Camera* cam);
+LE_SHARED bool cam_setDownsize(Camera* cam, uint8_t newSize);
+LE_SHARED uint8_t cam_getDownsize(Camera* cam);
+LE_SHARED uint8_t cam_available(Camera* cam);
+LE_SHARED char* cam_getVersion(Camera* cam);
+LE_SHARED uint32_t cam_frameLength(Camera* cam);
+LE_SHARED bool cam_resumeVideo(Camera* cam);
+LE_SHARED uint8_t* cam_readPicture(Camera* cam, uint8_t n);
+LE_SHARED bool cam_tvOff(Camera* cam);
+LE_SHARED bool cam_tvOn(Camera* cam);
+LE_SHARED bool cam_reset(Camera* cam);
+LE_SHARED bool cam_takePicture(Camera* cam);
+LE_SHARED bool cam_frameBuffCtrl(Camera* cam, uint8_t cmd);
 
 // Low level camera commands
-bool cam_runCommandFlush (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen);
-bool cam_verifyResponse (Camera *cam, uint8_t cmd);
-uint8_t cam_readResponse (Camera *cam, uint8_t nBytes, uint8_t timeout);
-bool cam_runCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs, uint8_t respLen, bool flushFlag);
-void cam_sendCommand (Camera *cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
+bool cam_runCommandFlush(Camera* cam,
+                         uint8_t cmd,
+                         uint8_t args[],
+                         uint8_t nArgs,
+                         uint8_t respLen);
+bool cam_verifyResponse(Camera* cam, uint8_t cmd);
+uint8_t cam_readResponse(Camera* cam, uint8_t nBytes, uint8_t timeout);
+bool cam_runCommand(Camera* cam,
+                    uint8_t cmd,
+                    uint8_t args[],
+                    uint8_t nArgs,
+                    uint8_t respLen,
+                    bool flushFlag);
+void cam_sendCommand(Camera* cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
 
 // Serial/file descriptor helpers
-int fd_dataAvail (int fd, int *data);
-ssize_t fd_getByte (int fd, uint8_t *data);
-LE_SHARED int fd_closeCam (int fd);
-LE_SHARED int fd_openCam ();
-int fd_openSerial (const char *device, int baud);
-speed_t fd_convertBaud (int baud);
+int fd_dataAvail(int fd, int* data);
+ssize_t fd_getByte(int fd, uint8_t* data);
+LE_SHARED int fd_closeCam(int fd);
+LE_SHARED int fd_openCam();
+int fd_openSerial(const char* device, int baud);
+speed_t fd_convertBaud(int baud);
 
 #endif
