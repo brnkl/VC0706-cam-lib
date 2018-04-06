@@ -111,8 +111,8 @@ int fd_openSerial(const char* device, int baud) {
 /**
  * Open a serial connection to the camera
  */
-int fd_openCam() {
-  return fd_openSerial(TTY_PATH, CAM_BAUD_RATE);
+int fd_openCam(char* devPath) {
+  return fd_openSerial(devPath, CAM_BAUD_RATE);
 }
 
 /**
