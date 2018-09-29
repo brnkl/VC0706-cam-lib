@@ -46,9 +46,10 @@
 #define CAM_SERIAL 0
 #define CAM_BAUD_RATE 38400
 #define TTY_TIMEOUT 5000
+#define MAX_PATH_SIZE 256
 
 typedef struct {
-  char devPath[256];
+  char devPath[MAX_PATH_SIZE];
   int fd;                       // file descriptor for the serial port
   uint8_t serialNum;            // camera serial number
   uint8_t buff[CAM_BUFF_SIZE];  // uint8_t array to store camera data
@@ -120,11 +121,7 @@ bool cam_runCommand(Camera* cam,
 void cam_sendCommand(Camera* cam, uint8_t cmd, uint8_t args[], uint8_t nArgs);
 
 // Serial/file descriptor helpers
-int fd_dataAvail(int fd, int* data);
-ssize_t fd_getByte(int fd, uint8_t* data);
 LE_SHARED int fd_closeCam(int fd);
 LE_SHARED int fd_openCam(char* devPath);
-int fd_openSerial(const char* device, int baud);
-speed_t fd_convertBaud(int baud);
-
+ssize_t fd_getByte(int fd, uint8_t* data);
 #endif
